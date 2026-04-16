@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Rinde Carne Súper Ahorro</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&family=Inter:wght@400;600;800&display=swap');
+        
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #f1f5f9; 
+            overscroll-behavior-y: contain;
+        }
+
+        /* Ocultar flechas de inputs numéricos */
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+
+        /* Estilo base para celdas de entrada */
+        .input-cell {
+            width: 100%;
+            border: 1px solid #cbd5e1;
+            padding: 4px 2px;
+            text-align: center;
+            border-radius: 4px;
+            font-weight: 800;
+            font-size: 11px;
+            font-family: 'Roboto Mono', monospace;
+            transition: all 0.2s;
+            line-height: normal;
+            display: block;
+            box-sizing: border-box;
+            appearance: none;
+        }
+
+        .input-cell:focus {
+            outline: 2px solid #3b82f6;
+            border-color: transparent;
+            background-color: #fff;
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+        }
+
+        .input-peso {
+            max-width: 70px;
+            margin-left: auto;
+            text-align: right;
+            padding-right: 8px;
+        }
+
+        /* Ajuste específico para el Precio Base Editable */
+        .input-precio-base {
+            background-color: #f8fafc;
+            font-style: italic;
+            color: #334155;
+            font-size: 12px;
+            border-color: #e2e8f0;
+            width: 90%;
+            margin: 0 auto;
+        }
+
+        .config-input {
+            background-color: #0f172a;
+            color: white;
+            border: 1px solid #334155;
+            padding: 4px 6px;
+            border-radius: 4px;
+            font-weight: 800;
+            font-size: 14px;
+            width: 100%;
+            max-width: 90px;
+            outline: none;
+            text-align: center;
+        }
+
+        .tabular-nums {
+            font-variant-numeric: tabular-nums;
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        /* Contenedor de tabla responsivo */
+        .table-container {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        @media (max-width: 640px) {
+            .report-box {
+                padding: 10px !important;
+                min-width: 600px; /* Asegura que el reporte mantenga forma de documento al scrollear */
+            }
+            .header-stack {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+        }
+
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white !important; padding: 0 !important; }
+            .report-box { 
+                box-shadow: none !important; 
+                border: none !important; 
+                margin: 0 !important; 
+                width: 100% !important; 
+                max-width: none !important; 
+                padding: 1mm 2mm !important;
+                min-height: auto !important;
+                min-width: 0 !important;
+            }
+            table { font-size: 10px !important; width: 100% !important; border-collapse: collapse !important; }
+            th, td { padding: 3px 4px !important; line-height: 1.1 !important; border-bottom: 0.5pt solid #eee !important; }
+            tr { page-break-inside: avoid !important; }
+            .pdf-right { text-align: right !important; }
+            .pdf-center { text-align: center !important; }
+        }
+
+        .loader {
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3b82f6;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo, useEffect } = React;
+
+        const PROXIES = [
+            "https://api.allorigins.win/raw?url=",
+            "https://corsproxy.io/?",
+            "https://api.codetabs.com/v1/proxy?quest="
+        ];
+
+        const URL_CODIGOS = "https://www.dropbox.com/scl/fi/muga04qubd5nfrx0lyle4/CODIGOS-RINDE-CARNE.txt?rlkey=spl9mxif80tq5t4lylgfh0dyn&st=xbr6dhh0&raw=1";
+        const URL_ITEMS = "https://www.dropbox.com/scl/fi/7h96tmvxvolqwdvlt7225/ITEMS.TXT?rlkey=xu6jmvs4yk7kkqk29wwxr8uuv&st=n3k2aocp&raw=1";
+
+        const PRECIOS_PROVISORIOS = {
+            "3320": 397.31,
+            "GRASA DE VACA": 397.31,
+            "JAMON CUADRADO": 23850,
+            "JAMON REDONDO": 24100,
+            "TORTUGUITA": 18000,
+            "HUESO": 0.91,
+            "RECORTE": 12486.79,
+            "RECORTE DE CARNE": 12486.79
+        };
+
+        const App = () => {
+            const [cortes, setCortes] = useState([]);
+            const [costoCompra, setCostoCompra] = useState({ pesoMediaRes: 101, costoKg: 9500 });
+            const [porcentajeGral, setPorcentajeGral] = useState("");
+            const [status, setStatus] = useState("INICIANDO...");
+            const [loading, setLoading] = useState(true);
+
+            const formatMoney = (v) => new Intl.NumberFormat('es-AR', { 
+                style: 'currency', 
+                currency: 'ARS', 
+                maximumFractionDigits: 0 
+            }).format(v);
+
+            const fetchConRetries = async (url) => {
+                for (let proxy of PROXIES) {
+                    try {
+                        const res = await fetch(proxy + encodeURIComponent(url));
+                        if (res.ok) return await res.text();
+                    } catch (e) {}
+                }
+                throw new Error("Conexión fallida");
+            };
+
+            const parsearPreciosItems = (texto) => {
+                const precios = {};
+                const lineas = texto.split(/\r?\n/);
+                lineas.forEach(linea => {
+                    const celdas = linea.trim().split(/\t+| {2,}/);
+                    if (celdas.length < 2) return;
+                    const id = celdas[0].trim();
+                    let precioDetectado = null;
+                    celdas.forEach(c => {
+                        let val = parseFloat(c.replace(/,/g, ''));
+                        if (!isNaN(val) && val > 1000 && val < 100000 && val !== parseFloat(id)) precioDetectado = val;
+                    });
+                    if (id && precioDetectado) precios[id] = precioDetectado;
+                });
+                return precios;
+            };
+
+            const parsearEstructuraCortes = (texto) => {
+                const lista = [];
+                const lineas = texto.split(/\r?\n/);
+                lineas.forEach(linea => {
+                    const l = linea.trim();
+                    if (!l) return;
+                    const match = l.match(/^(\d+)?\s*(.*?)\s+([\d,.]+)$/);
+                    if (match) {
+                        lista.push({
+                            id: match[1] || "S/N",
+                            nombre: match[2].trim(),
+                            peso: parseFloat(match[3].replace(',', '.')) || 0,
+                            precioVenta: 0
+                        });
+                    }
+                });
+                return lista;
+            };
+
+            const sincronizarTodo = async () => {
+                setLoading(true);
+                setStatus("SINCRONIZANDO...");
+                try {
+                    const [txtCodigos, txtItems] = await Promise.all([
+                        fetchConRetries(URL_CODIGOS),
+                        fetchConRetries(URL_ITEMS)
+                    ]);
+                    const estructura = parsearEstructuraCortes(txtCodigos);
+                    const preciosMap = parsearPreciosItems(txtItems);
+                    const final = estructura.map(c => {
+                        let pFound = preciosMap[c.id];
+                        if (!pFound) {
+                            const nombreLimpio = c.nombre.replace(" KG", "").trim().toUpperCase();
+                            pFound = PRECIOS_PROVISORIOS[c.id] || PRECIOS_PROVISORIOS[nombreLimpio] || 0;
+                        }
+                        return { ...c, precioVenta: pFound };
+                    });
+                    setCortes(final);
+                    setStatus("CONECTADO");
+                } catch (e) {
+                    setStatus("ERROR CLOUD");
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            useEffect(() => { sincronizarTodo(); }, []);
+
+            const totals = useMemo(() => {
+                const inversion = costoCompra.pesoMediaRes * costoCompra.costoKg;
+                let ventaTotal = 0;
+                let pesoTotalCortes = 0;
+                const adjGral = parseFloat(porcentajeGral) || 0;
+
+                cortes.forEach(c => {
+                    const pFinal = (parseFloat(c.precioVenta) || 0) * (1 + (adjGral / 100));
+                    ventaTotal += (c.peso * pFinal);
+                    pesoTotalCortes += c.peso;
+                });
+
+                return {
+                    inversion, 
+                    ventaTotal, 
+                    ganancia: ventaTotal - inversion,
+                    pesoTotalCortes,
+                    margen: inversion > 0 ? ((ventaTotal - inversion) / inversion) * 100 : 0,
+                    mermaKg: costoCompra.pesoMediaRes - pesoTotalCortes
+                };
+            }, [cortes, costoCompra, porcentajeGral]);
+
+            const handleUpdateCorte = (index, field, value) => {
+                const newCortes = [...cortes];
+                newCortes[index][field] = value;
+                setCortes(newCortes);
+            };
+
+            const handleGeneratePDF = () => {
+                const element = document.getElementById('reporte-final');
+                const opt = {
+                    margin: [2, 2, 2, 2],
+                    filename: `Reporte_Rendimiento_${new Date().toLocaleDateString()}.pdf`,
+                    image: { type: 'jpeg', quality: 0.98 },
+                    html2canvas: { scale: 3, useCORS: true, letterRendering: true },
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                };
+                html2pdf().from(element).set(opt).save();
+            };
+
+            const formatSignedPercent = (val) => {
+                const n = parseFloat(val) || 0;
+                return (n >= 0 ? "+" : "") + n + "%";
+            };
+
+            return (
+                <div className="flex flex-col h-screen overflow-hidden bg-slate-900">
+                    <header className="bg-slate-900 text-white p-2 no-print shrink-0 shadow-2xl z-10 border-b border-slate-700">
+                        <div className="max-w-7xl mx-auto flex flex-col gap-2">
+                            <div className="flex justify-between items-center border-b border-slate-800 pb-1">
+                                <div className="flex items-center gap-2 sm:gap-3">
+                                    <div className="bg-blue-600 px-1.5 sm:px-2 py-0.5 rounded font-black text-lg sm:text-xl tracking-tighter">RSA</div>
+                                    <div className="flex flex-col">
+                                        <h1 className="text-[10px] sm:text-xs font-black uppercase italic tracking-tighter leading-none">Rinde Carne</h1>
+                                        <p className="text-[8px] sm:text-[10px] text-slate-500 font-bold uppercase">{status}</p>
+                                    </div>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button onClick={sincronizarTodo} className="bg-slate-800 hover:bg-slate-700 p-2 rounded transition-all text-white active:scale-95">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>
+                                    </button>
+                                    <button onClick={handleGeneratePDF} className="bg-green-600 hover:bg-green-500 px-3 sm:px-4 py-2 rounded font-black text-[9px] sm:text-[10px] uppercase tracking-widest flex items-center gap-2 text-white transition-all active:scale-95">
+                                        <span className="hidden sm:inline">Exportar</span> PDF
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-4">
+                                <div className="flex items-center gap-1 sm:gap-2 bg-slate-950 p-1 rounded-lg border border-slate-800 w-full sm:w-auto overflow-x-auto">
+                                    <div className="flex flex-col px-2 border-r border-slate-800 min-w-[70px]">
+                                        <label className="text-[7px] uppercase font-black text-slate-500 mb-0.5">Media Res</label>
+                                        <input type="number" className="config-input" value={costoCompra.pesoMediaRes} onChange={e => setCostoCompra({...costoCompra, pesoMediaRes: parseFloat(e.target.value) || 0})} />
+                                    </div>
+                                    <div className="flex flex-col px-2 border-r border-slate-800 min-w-[70px]">
+                                        <label className="text-[7px] uppercase font-black text-slate-500 mb-0.5">Costo x Kg</label>
+                                        <input type="number" className="config-input" value={costoCompra.costoKg} onChange={e => setCostoCompra({...costoCompra, costoKg: parseFloat(e.target.value) || 0})} />
+                                    </div>
+                                    <div className="flex flex-col px-2 min-w-[70px]">
+                                        <label className="text-[7px] uppercase font-black text-blue-400 mb-0.5">Margen %</label>
+                                        <input type="number" className="config-input border-blue-900/50 text-blue-400" value={porcentajeGral} placeholder="0" onChange={e => setPorcentajeGral(e.target.value)} />
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-1 justify-end items-center gap-3 sm:gap-6 mt-1 sm:mt-0">
+                                    <div className="text-right hidden md:block">
+                                        <p className="text-[8px] uppercase font-black text-slate-500">Inversión</p>
+                                        <p className="text-xs font-black text-white leading-none">{formatMoney(totals.inversion)}</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-[8px] uppercase font-black text-blue-400">Venta</p>
+                                        <p className="text-xs sm:text-sm font-black text-blue-400 leading-none">{formatMoney(totals.ventaTotal)}</p>
+                                    </div>
+                                    <div className="text-right bg-slate-950 p-1.5 sm:p-2 rounded-lg border border-slate-800">
+                                        <p className="text-[8px] uppercase font-black text-green-500">Utilidad</p>
+                                        <p className="text-sm sm:text-lg font-black text-green-500 leading-none">{formatMoney(totals.ganancia)}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </header>
+
+                    <main className="flex-1 overflow-auto p-2 sm:p-4 bg-slate-200 print:p-0 print:bg-white">
+                        <div className="max-w-5xl mx-auto">
+                            <div id="reporte-final" className="bg-white p-4 shadow-2xl report-box min-h-[296mm] flex flex-col border border-slate-300 print:border-0 print:shadow-none print:p-2 print:min-h-0">
+                                
+                                <div className="flex justify-between items-end border-b-4 border-slate-900 pb-1 mb-2">
+                                    <div>
+                                        <h2 className="text-xl sm:text-2xl font-black text-slate-900 uppercase italic leading-none tracking-tighter">RENDIMIENTO DE CARNE</h2>
+                                        <div className="flex gap-4 mt-1">
+                                            <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest italic">Ajuste: {formatSignedPercent(porcentajeGral)}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2 sm:gap-4 text-right">
+                                        <div className="border-r border-slate-200 pr-2 sm:pr-4">
+                                            <p className="text-[7px] sm:text-[8px] font-black text-slate-400 uppercase">Media Res</p>
+                                            <p className="text-[10px] sm:text-[12px] font-black text-slate-900 leading-none">{costoCompra.pesoMediaRes} KG</p>
+                                        </div>
+                                        <div className="border-r border-slate-200 pr-2 sm:pr-4">
+                                            <p className="text-[7px] sm:text-[8px] font-black text-indigo-400 uppercase">En Cortes</p>
+                                            <p className="text-[10px] sm:text-[12px] font-black text-indigo-700 leading-none">{totals.pesoTotalCortes.toFixed(2)} KG</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[7px] sm:text-[8px] font-black text-orange-400 uppercase">Merma</p>
+                                            <p className="text-[10px] sm:text-[12px] font-black text-orange-600 leading-none">{totals.mermaKg.toFixed(2)} KG</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex-1 table-container">
+                                    <table className="w-full border-collapse">
+                                        <thead>
+                                            <tr className="bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest">
+                                                <th className="p-1 text-left w-[5%]">COD</th>
+                                                <th className="p-1 text-left w-[29%]">DESCRIPCIÓN</th>
+                                                <th className="p-1 text-right w-[10%]">PESO (KG)</th>
+                                                <th className="p-1 text-center w-[16%]">PREC. BASE</th>
+                                                <th className="p-1 text-right w-[18%]">PREC. C/MARGEN</th>
+                                                <th className="p-1 text-right w-[22%]">SUBTOTAL</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {loading ? (
+                                                <tr><td colSpan="6" className="p-8 text-center"><div className="loader mx-auto"></div></td></tr>
+                                            ) : cortes.map((c, i) => {
+                                                const adj = parseFloat(porcentajeGral) || 0;
+                                                const pBase = parseFloat(c.precioVenta) || 0;
+                                                const pFinal = pBase * (1 + (adj / 100));
+                                                return (
+                                                    <tr key={i} className="hover:bg-slate-50 transition-colors">
+                                                        <td className="p-1 text-[9px] font-mono text-slate-400 font-bold">{c.id}</td>
+                                                        <td className="p-1 text-[11px] font-black text-slate-800 uppercase tracking-tighter leading-none">{c.nombre}</td>
+                                                        <td className="p-1 text-right pdf-right" style={{ textAlign: 'right' }}>
+                                                            <input 
+                                                                type="number" 
+                                                                className="input-cell no-print h-6 input-peso" 
+                                                                value={c.peso || ''} 
+                                                                onChange={e => handleUpdateCorte(i, 'peso', parseFloat(e.target.value) || 0)} 
+                                                            />
+                                                            <span className="hidden print:block text-[11px] font-black tabular-nums">{c.peso.toFixed(2)}</span>
+                                                        </td>
+                                                        <td className="p-1 text-center pdf-center" style={{ textAlign: 'center' }}>
+                                                            <input 
+                                                                type="number" 
+                                                                className="input-cell no-print h-6 input-precio-base" 
+                                                                value={c.precioVenta || ''} 
+                                                                onChange={e => handleUpdateCorte(i, 'precioVenta', parseFloat(e.target.value) || 0)} 
+                                                            />
+                                                            <span className="hidden print:block text-[10px] font-bold text-slate-400 italic tabular-nums">{formatMoney(pBase)}</span>
+                                                        </td>
+                                                        <td className="p-1 text-right pdf-right text-[13px] font-black text-blue-700 tabular-nums" style={{ textAlign: 'right' }}>
+                                                            {formatMoney(pFinal)}
+                                                        </td>
+                                                        <td className="p-1 text-right pdf-right text-[14px] font-black text-slate-900 tabular-nums" style={{ textAlign: 'right' }}>
+                                                            {formatMoney(c.peso * pFinal)}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                        <tfoot>
+                                            <tr className="bg-slate-50 border-t-2 border-slate-900">
+                                                <td colSpan="3" className="p-2 text-left text-[10px] font-black uppercase text-slate-500 italic">Total Cortes: {totals.pesoTotalCortes.toFixed(2)} KG</td>
+                                                <td colSpan="2" className="p-2 text-right text-[11px] font-black uppercase text-slate-700">TOTAL ESTIMADO:</td>
+                                                <td className="p-2 text-right pdf-right text-[16px] font-black text-slate-950 underline decoration-double tabular-nums" style={{ textAlign: 'right' }}>{formatMoney(totals.ventaTotal)}</td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+
+                                <div className="mt-2 pt-2 border-t-2 border-slate-900 flex flex-wrap justify-between items-stretch gap-2">
+                                    <div className="flex flex-col gap-2 flex-1 min-w-[200px]">
+                                        <div className="bg-slate-50 p-2 rounded border-l-4 border-slate-900 flex items-center justify-between shadow-sm">
+                                            <div className="flex flex-col">
+                                                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Inversión Real</p>
+                                                <p className="text-[7px] text-slate-400 italic">({costoCompra.pesoMediaRes}kg x {formatMoney(costoCompra.costoKg)})</p>
+                                            </div>
+                                            <p className="text-xl font-black text-slate-900 tabular-nums">{formatMoney(totals.inversion)}</p>
+                                        </div>
+                                        <div className="bg-green-50 p-2 rounded border-l-4 border-green-600 flex items-center justify-between shadow-sm">
+                                            <p className="text-[10px] font-black text-green-600 uppercase tracking-widest">Utilidad Neta</p>
+                                            <p className="text-2xl font-black text-green-700 tabular-nums italic">{formatMoney(totals.ganancia)}</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="bg-slate-900 p-4 rounded-xl text-center shadow-lg shadow-slate-900/20 flex flex-col justify-center flex-1 min-w-[150px]">
+                                        <p className="text-[10px] font-black text-blue-400 uppercase mb-1 tracking-[0.2em] leading-none text-center">RENDIMIENTO</p>
+                                        <p className="text-4xl sm:text-5xl font-black text-white leading-none tracking-tighter italic tabular-nums text-center">
+                                            {totals.margen.toFixed(1)}%
+                                        </p>
+                                    </div>
+                                </div>
+                                
+                                <div className="mt-3 text-[8px] font-black text-slate-300 uppercase italic tracking-widest text-center border-t border-slate-100 pt-2">
+                                    Sistema RSA v4.1 | Adaptabilidad Móvil Habilitada
+                                </div>
+                            </div>
+                        </div>
+                    </main>
+
+                    <footer className="bg-slate-950 text-white p-1.5 px-4 sm:px-6 no-print shrink-0 border-t border-slate-800 flex justify-between items-center">
+                        <span className="text-[8px] sm:text-[9px] font-black text-slate-600 uppercase tracking-widest italic">RSA | Cloud Management</span>
+                        <div className="flex gap-4 sm:gap-6">
+                            <span className="text-[8px] sm:text-[9px] font-bold text-slate-400 tabular-nums hidden xs:inline">INV: {formatMoney(totals.inversion)}</span>
+                            <span className="text-[8px] sm:text-[9px] font-bold text-green-400 uppercase italic tabular-nums">UTI: {formatMoney(totals.ganancia)}</span>
+                        </div>
+                    </footer>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
